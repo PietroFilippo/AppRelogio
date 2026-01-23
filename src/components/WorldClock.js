@@ -1,49 +1,154 @@
+import { timezones } from '../data/timezones.js';
+import { showModal } from '../utils/modal.js';
+
 export function WorldClock() {
     const container = document.createElement('div');
     container.className = 'view-container world-clock-view';
 
-    // State
+    // Estado
     let clocks = JSON.parse(localStorage.getItem('worldClocks')) || [
         { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, label: 'Local Time' }
     ];
+    let isEditing = false;
+    let draggedItemIndex = null;
 
     function renderClocks() {
         container.innerHTML = `
       <div class="header">
+        <button class="edit-btn" id="edit-clock-btn">${isEditing ? 'Done' : 'Edit'}</button>
         <h1>World Clock</h1>
-        <button class="add-btn" id="add-clock-btn">+</button>
+        <button class="add-btn" id="add-clock-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}">+</button>
       </div>
-      <div class="clock-list">
+      <div class="clock-list ${isEditing ? 'edit-mode' : ''}">
         ${clocks.map((clock, index) => createClockHTML(clock, index)).join('')}
       </div>
     `;
 
         // Reanexa listeners
-        container.querySelector('#add-clock-btn').onclick = promptAddClock;
+        container.querySelector('#add-clock-btn').onclick = openCitySearch;
+        container.querySelector('#edit-clock-btn').onclick = toggleEditMode;
+
+        // Listeners de exclusão
+        container.querySelectorAll('.delete-clock-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                const index = Number(e.currentTarget.dataset.index);
+                deleteClock(index);
+            };
+        });
+
+        // Listeners de arrastar (ativos apenas no modo de edição)
+        if (isEditing) {
+            enableDragAndDrop();
+        }
     }
 
     function createClockHTML(clock, index) {
         const now = new Date();
-        const timeString = now.toLocaleTimeString('en-US', {
-            timeZone: clock.timezone,
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
-        const timeParts = timeString.split(':'); // Simples para hh:mm básico por enquanto
-
-        // Calcula a diferença de tempo
-        // Simplifica por enquanto mostrando apenas a hora
+        let timeString = '--:--';
+        try {
+            timeString = now.toLocaleTimeString('en-US', {
+                timeZone: clock.timezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        } catch (e) { }
 
         return `
-      <div class="clock-card">
-        <div class="clock-info">
-          <span class="clock-label">${clock.label}</span>
-          <span class="clock-timezone">${clock.timezone}</span>
+      <div class="clock-card" data-index="${index}" draggable="${isEditing}">
+        <button class="delete-clock-btn" data-index="${index}">−</button>
+        <div class="clock-card-inner">
+            <div class="clock-info">
+            <span class="clock-label">${clock.label}</span>
+            <span class="clock-timezone">${clock.country || clock.timezone}</span>
+            </div>
+            <div class="clock-time">${timeString}</div>
         </div>
-        <div class="clock-time">${timeString}</div>
+        <div class="drag-handle" draggable="true">≡</div>
       </div>
     `;
+    }
+
+    function toggleEditMode() {
+        isEditing = !isEditing;
+        renderClocks();
+    }
+
+    function enableDragAndDrop() {
+        const cards = container.querySelectorAll('.clock-card');
+        const list = container.querySelector('.clock-list');
+
+        cards.forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                draggedItemIndex = Number(card.dataset.index);
+                card.classList.add('dragging');
+                // Obrigatório pro Firefox
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('dragging');
+                draggedItemIndex = null;
+            });
+
+            card.addEventListener('dragover', (e) => {
+                e.preventDefault(); // Permite soltar
+                const afterElement = getDragAfterElement(list, e.clientY);
+                const draggable = document.querySelector('.dragging');
+                if (afterElement == null) {
+                    list.appendChild(draggable);
+                } else {
+                    list.insertBefore(draggable, afterElement);
+                }
+            });
+
+            // Manipula drop pra salvar o estado
+            card.addEventListener('drop', (e) => {
+                e.preventDefault();
+                saveNewOrder();
+            });
+        });
+        // Ouve na lista por drop se solto na parte inferior
+        list.addEventListener('drop', (e) => {
+            e.preventDefault();
+            saveNewOrder();
+        });
+    }
+
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.clock-card:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    function saveNewOrder() {
+        // Reconstrói array com base na ordem do DOM
+        const newClocks = [];
+        container.querySelectorAll('.clock-card').forEach(card => {
+            const oldIndex = Number(card.dataset.index);
+            newClocks.push(clocks[oldIndex]);
+        });
+
+        const reorderedClocks = [];
+        const currentCards = container.querySelectorAll('.clock-card');
+        currentCards.forEach(card => {
+            const idx = Number(card.dataset.index);
+            reorderedClocks.push(clocks[idx]);
+        });
+
+        clocks = reorderedClocks;
+        localStorage.setItem('worldClocks', JSON.stringify(clocks));
+
+        // Re-renderiza pra atualizar os índices
+        renderClocks();
     }
 
     function updateTimes() {
@@ -51,36 +156,101 @@ export function WorldClock() {
         timeElements.forEach((el, index) => {
             const clock = clocks[index];
             const now = new Date();
-            el.textContent = now.toLocaleTimeString('en-US', {
-                timeZone: clock.timezone,
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-            });
+            try {
+                el.textContent = now.toLocaleTimeString('en-US', {
+                    timeZone: clock.timezone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+            } catch (e) { }
         });
     }
 
-    function promptAddClock() {
-        // Prompt simples temporário
-        const tz = prompt("Enter Timezone (e.g., 'America/New_York' or 'Europe/London')", "UTC");
-        if (tz) {
-            try {
-                // Valida timezone
-                new Date().toLocaleString('en-US', { timeZone: tz });
-                clocks.push({ timezone: tz, label: tz.split('/')[1] || tz });
-                localStorage.setItem('worldClocks', JSON.stringify(clocks));
-                renderClocks();
-            } catch (e) {
-                alert("Invalid Timezone");
-            }
+    function openCitySearch() {
+        showModal({
+            title: 'Choose City',
+            content: `
+            <input type="text" id="city-search" class="modal-input" placeholder="Search city..." style="width: 100%; margin-bottom: 10px;">
+            <div id="city-list" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; min-height: 200px;">
+                ${renderCityList(timezones)}
+            </div>
+        `,
+            onSave: () => { }
+        });
+
+        const overlay = document.querySelector('.modal-overlay');
+        if (!overlay) return;
+
+        const saveBtn = overlay.querySelector('.save');
+        if (saveBtn) saveBtn.style.display = 'none';
+
+        const searchInput = overlay.querySelector('#city-search');
+        const cityListEl = overlay.querySelector('#city-list');
+
+        searchInput.focus();
+
+        searchInput.oninput = (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = timezones.filter(tz =>
+                tz.city.toLowerCase().includes(term) ||
+                tz.country.toLowerCase().includes(term)
+            );
+            cityListEl.innerHTML = renderCityList(filtered);
+            attachCityListeners(overlay);
+        };
+
+        attachCityListeners(overlay);
+    }
+
+    function renderCityList(list) {
+        if (list.length === 0) return '<div style="text-align:center; padding: 20px; color: #8e8e93;">No results</div>';
+        return list.map(tz => `
+        <button class="city-item-btn" data-zone="${tz.zone}" data-city="${tz.city}" data-country="${tz.country}"
+            style="
+                background: #2c2c2e; border: none; padding: 12px; border-radius: 8px; 
+                color: white; text-align: left; cursor: pointer; display: flex; justify-content: space-between;
+                align-items: center;
+            ">
+            <span style="font-weight: 500;">${tz.city}</span>
+            <span style="color: #8e8e93; font-size: 14px;">${tz.country}</span>
+        </button>
+      `).join('');
+    }
+
+    function attachCityListeners(overlay) {
+        const btns = overlay.querySelectorAll('.city-item-btn');
+        btns.forEach(btn => {
+            btn.onclick = () => {
+                const zone = btn.dataset.zone;
+                const city = btn.dataset.city;
+                const country = btn.dataset.country;
+                addClock({ timezone: zone, label: city, country: country });
+                document.body.removeChild(overlay);
+            };
+        });
+    }
+
+    function addClock(clockData) {
+        if (clocks.some(c => c.timezone === clockData.timezone)) {
+            return;
         }
+        clocks.push(clockData);
+        localStorage.setItem('worldClocks', JSON.stringify(clocks));
+        renderClocks();
+        updateTimes();
+    }
+
+    function deleteClock(index) {
+        clocks.splice(index, 1);
+        localStorage.setItem('worldClocks', JSON.stringify(clocks));
+        renderClocks();
     }
 
     renderClocks();
 
     const intervalId = setInterval(updateTimes, 1000);
 
-    // Retorna objeto com elemento e cleanup
     return {
         element: container,
         cleanup: () => {
