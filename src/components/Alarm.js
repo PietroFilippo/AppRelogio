@@ -17,7 +17,10 @@ export function Alarm() {
       <div class="header">
         <button class="edit-btn" id="edit-alarm-btn">${isEditing ? 'Done' : 'Edit'}</button>
         <h1>Alarm</h1>
-        <button class="add-btn" id="add-alarm-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}">+</button>
+        <div style="display: flex; gap: 10px;">
+            <button class="add-btn" id="audio-settings-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}; font-size: 14px; width: auto; padding: 0 10px;">Sound</button>
+            <button class="add-btn" id="add-alarm-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}">+</button>
+        </div>
       </div>
       <div class="alarm-list ${isEditing ? 'edit-mode' : ''}">
         ${alarms.length === 0 ? '<p style="text-align:center; color:var(--text-secondary); margin-top:50px;">No Alarms</p>' : ''}
@@ -70,6 +73,7 @@ export function Alarm() {
 
   function attachListeners() {
     container.querySelector('#add-alarm-btn').onclick = () => openAlarmModal();
+    container.querySelector('#audio-settings-btn').onclick = () => openAudioSettingsModal();
     container.querySelector('#edit-alarm-btn').onclick = () => {
       isEditing = !isEditing;
       render();
@@ -105,6 +109,107 @@ export function Alarm() {
     }
   }
 
+  function openAudioSettingsModal() {
+    const volume = alarmManager.getVolume();
+    const customSounds = alarmManager.getCustomSounds();
+
+    const content = `
+        <div class="audio-settings">
+            <div class="audio-controls">
+                <label>Master Volume</label>
+                <div class="volume-slider-container">
+                    <span id="vol-low">🔈</span>
+                    <input type="range" id="master-volume" class="volume-slider" min="0" max="1" step="0.1" value="${volume}">
+                    <span id="vol-high">🔊</span>
+                </div>
+            </div>
+
+            <label style="display:block; margin-bottom:10px;">Custom Sounds (${customSounds.length}/10)</label>
+            <div class="custom-sound-list" id="custom-sound-list">
+                ${customSounds.map(s => `
+                    <div class="custom-sound-item">
+                        <span class="custom-sound-name">${s.name}</span>
+                        <div class="sound-actions">
+                            <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}">▶</button>
+                            <button class="sound-btn delete" data-id="${s.id}">🗑</button>
+                        </div>
+                    </div>
+                `).join('')}
+                ${customSounds.length === 0 ? '<div style="text-align:center; color:#555; padding:10px;">No custom sounds</div>' : ''}
+            </div>
+
+            ${customSounds.length < 10 ? `
+            <div class="file-input-wrapper">
+                <div class="upload-btn">Upload Sound (Max 2MB)</div>
+                <input type="file" id="sound-upload" accept="audio/*">
+            </div>
+            ` : '<div style="text-align:center; color:var(--accent-red);">Limit reached (10/10)</div>'}
+        </div>
+      `;
+
+    const overlay = showModal({
+      title: 'Audio Settings',
+      content,
+      onSave: () => { } // Save is unnecessary as changes are instant, but button closes modal
+    });
+
+    // Hide Cancel/Save buttons or rename Save to Close?
+    // "Save" button acts as Close here. We can rename it.
+    overlay.querySelector('.modal-btn.save').textContent = 'Done';
+    overlay.querySelector('.modal-btn.cancel').style.display = 'none';
+
+    // Attach Listeners
+    const volumeSlider = overlay.querySelector('#master-volume');
+    volumeSlider.oninput = (e) => {
+      alarmManager.setVolume(Number(e.target.value));
+    };
+
+    // Upload
+    const uploadInput = overlay.querySelector('#sound-upload');
+    if (uploadInput) {
+      uploadInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) { // 2MB
+          alert('File too large (Max 2MB)');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (loadEvent) => {
+          const base64 = loadEvent.target.result;
+          const name = file.name.split('.')[0]; // remove extension for label
+          if (alarmManager.addCustomSound(name, base64)) {
+            overlay.remove(); // Close and re-open to refresh list (lazy way)
+            openAudioSettingsModal(); // Re-open
+          }
+        };
+        reader.readAsDataURL(file);
+      };
+    }
+
+    // List Actions
+    overlay.querySelectorAll('.play-preview').forEach(btn => {
+      btn.onclick = () => {
+        const src = btn.dataset.src;
+        const audio = new Audio(src);
+        audio.volume = alarmManager.getVolume();
+        audio.play();
+      };
+    });
+
+    overlay.querySelectorAll('.delete').forEach(btn => {
+      btn.onclick = () => {
+        if (confirm('Delete this sound?')) {
+          alarmManager.deleteCustomSound(btn.dataset.id);
+          overlay.remove();
+          openAudioSettingsModal();
+        }
+      };
+    });
+  }
+
   function openAlarmModal(existingId = null) {
     let alarm = {
       time: '08:00',
@@ -112,13 +217,15 @@ export function Alarm() {
       repeat: [],
       sound: 'default',
       snoozeEnabled: true,
-      snoozeInterval: 9
+      snoozeInterval: 5
     };
 
     if (existingId) {
       const found = alarmManager.getAlarms().find(a => a.id === existingId);
       if (found) alarm = { ...found };
     }
+
+    const customSounds = alarmManager.getCustomSounds();
 
     const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -144,6 +251,7 @@ export function Alarm() {
                     <span>Sound</span>
                     <select id="modal-sound">
                         <option value="default" ${alarm.sound === 'default' ? 'selected' : ''}>Radar (Default)</option>
+                        ${customSounds.map(s => `<option value="${s.id}" ${alarm.sound === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
                     </select>
                 </div>
                 <div class="modal-row">
@@ -228,39 +336,7 @@ export function Alarm() {
     render();
   }
 
-  function onAlarmRing(e) {
-    const { alarm, isSnooze } = e.detail;
-    const overlay = showModal({
-      title: alarm.label || '',
-      content: `
-                <div style="text-align:center;">
-                    <h1 style="font-size:60px; margin:20px 0;">${alarm.time}</h1>
-                    ${alarm.snoozeEnabled ? `<button class="modal-btn snooze-btn" style="background:var(--accent-orange); color:black; width:100%; margin-bottom:10px;">Snooze (${alarm.snoozeInterval || 9} min)</button>` : ''}
-                </div>
-            `,
-      onSave: () => {
-        alarmManager.stopAlarm(alarm.id);
-      }
-    });
-
-    const snoozeBtn = overlay.querySelector('.snooze-btn');
-    if (snoozeBtn) {
-      snoozeBtn.onclick = () => {
-        alarmManager.snoozeAlarm(alarm.id);
-        overlay.remove();
-      };
-    }
-
-    const saveBtn = overlay.querySelector('.modal-btn.save');
-    if (saveBtn) {
-      saveBtn.textContent = 'Stop';
-      saveBtn.style.background = 'var(--accent-red)';
-      saveBtn.style.color = 'white';
-    }
-  }
-
   document.addEventListener('alarms-updated', onAlarmsUpdated);
-  document.addEventListener('alarm-ring', onAlarmRing);
 
   render();
 
@@ -268,7 +344,6 @@ export function Alarm() {
     element: container,
     cleanup: () => {
       document.removeEventListener('alarms-updated', onAlarmsUpdated);
-      document.removeEventListener('alarm-ring', onAlarmRing);
     }
   };
 }

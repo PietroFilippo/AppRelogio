@@ -5,8 +5,42 @@ import { Alarm } from './components/Alarm.js';
 import { Stopwatch } from './components/Stopwatch.js';
 import { Timer } from './components/Timer.js';
 import { alarmManager } from './modules/AlarmManager.js';
+import { showModal } from './utils/modal.js';
 
 alarmManager.init(); // Inicia checagem de alarmes
+
+function onAlarmRing(e) {
+  const { alarm, isSnooze } = e.detail;
+  const overlay = showModal({
+    title: alarm.label || '',
+    content: `
+              <div style="text-align:center;">
+                  <h1 style="font-size:60px; margin:20px 0;">${alarm.time}</h1>
+                  ${alarm.snoozeEnabled ? `<button class="modal-btn snooze-btn" style="background:var(--accent-orange); color:black; width:100%; margin-bottom:10px;">Snooze (${alarm.snoozeInterval || 9} min)</button>` : ''}
+              </div>
+          `,
+    onSave: () => {
+      alarmManager.stopAlarm(alarm.id);
+    }
+  });
+
+  const snoozeBtn = overlay.querySelector('.snooze-btn');
+  if (snoozeBtn) {
+    snoozeBtn.onclick = () => {
+      alarmManager.snoozeAlarm(alarm.id);
+      overlay.remove();
+    };
+  }
+
+  const saveBtn = overlay.querySelector('.modal-btn.save');
+  if (saveBtn) {
+    saveBtn.textContent = 'Stop';
+    saveBtn.style.background = 'var(--accent-red)';
+    saveBtn.style.color = 'white';
+  }
+}
+
+document.addEventListener('alarm-ring', onAlarmRing);
 
 
 const app = document.querySelector('#app');

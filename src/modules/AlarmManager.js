@@ -1,9 +1,12 @@
 export class AlarmManager {
     constructor() {
         this.alarms = JSON.parse(localStorage.getItem('alarms')) || [];
+        this.customSounds = JSON.parse(localStorage.getItem('customSounds')) || [];
+        this.volume = parseFloat(localStorage.getItem('alarmVolume')) || 1.0;
         this.permissionsGranted = false;
         this.checkInterval = null;
         this.audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // Som default
+        this.audio.volume = this.volume;
         this.snoozedAlarms = {};
         this.ringingAlarms = new Set();
     }
@@ -69,11 +72,23 @@ export class AlarmManager {
             new Notification('Alarm', { body: alarm.label || 'Time is up!' });
         }
 
-        // Som default
-        this.audio.src = alarm.sound === 'beep'
-            ? 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'
-            : 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+        // Determinar fonte de áudio
+        let src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'; // Fallback default
 
+        if (alarm.sound === 'default') {
+            src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+        } else if (alarm.sound === 'beep') {
+            src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'; // Placeholder
+        } else {
+            // Check custom sounds
+            const custom = this.customSounds.find(s => s.id === alarm.sound);
+            if (custom) {
+                src = custom.data;
+            }
+        }
+
+        this.audio.src = src;
+        this.audio.volume = this.volume;
         this.audio.loop = true;
         this.audio.play().catch(e => console.error("Audio play failed", e));
 
@@ -157,6 +172,45 @@ export class AlarmManager {
 
     getSnoozedAlarms() {
         return this.snoozedAlarms;
+    }
+
+    getCustomSounds() {
+        return this.customSounds;
+    }
+
+    getVolume() {
+        return this.volume;
+    }
+
+    setVolume(value) {
+        this.volume = Math.max(0, Math.min(1, value));
+        this.audio.volume = this.volume;
+        localStorage.setItem('alarmVolume', this.volume);
+    }
+
+    addCustomSound(name, data) {
+        if (this.customSounds.length >= 10) {
+            alert('Maximum of 10 custom sounds allowed.');
+            return false;
+        }
+        const newSound = {
+            id: 'custom_' + Date.now(),
+            name: name,
+            data: data
+        };
+        this.customSounds.push(newSound);
+        this.saveCustomSounds();
+        return true;
+    }
+
+    deleteCustomSound(id) {
+        this.customSounds = this.customSounds.filter(s => s.id !== id);
+        this.saveCustomSounds();
+    }
+
+    saveCustomSounds() {
+        localStorage.setItem('customSounds', JSON.stringify(this.customSounds));
+        document.dispatchEvent(new CustomEvent('alarms-updated'));
     }
 }
 
