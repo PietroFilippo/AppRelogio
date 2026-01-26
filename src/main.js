@@ -32,6 +32,10 @@ function onAlarmRing(e) {
     };
   }
 
+  // Desativa o botão Cancelar e o clique no fundo pro modal
+  overlay.querySelector('.cancel').style.display = 'none';
+  overlay.onclick = null;
+
   const saveBtn = overlay.querySelector('.modal-btn.save');
   if (saveBtn) {
     saveBtn.textContent = 'Stop';
