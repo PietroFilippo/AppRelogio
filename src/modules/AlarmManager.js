@@ -72,7 +72,7 @@ export class AlarmManager {
             new Notification('Alarm', { body: alarm.label || 'Time is up!' });
         }
 
-        // Determinar fonte de áudio
+        // Determina fonte de áudio
         let src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'; // Fallback default
 
         if (alarm.sound === 'default') {
@@ -80,7 +80,7 @@ export class AlarmManager {
         } else if (alarm.sound === 'beep') {
             src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'; // Placeholder
         } else {
-            // Check custom sounds
+            // Verifica sons personalizados
             const custom = this.customSounds.find(s => s.id === alarm.sound);
             if (custom) {
                 src = custom.data;
@@ -95,16 +95,39 @@ export class AlarmManager {
         document.dispatchEvent(new CustomEvent('alarm-ring', { detail: { alarm, isSnooze } }));
     }
 
+    triggerTimer(label, soundId) {
+        if (this.permissionsGranted) {
+            new Notification('Timer Finished', { body: label || 'Time is up!' });
+        }
+
+        let src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+        if (soundId !== 'default' && soundId) {
+            const custom = this.customSounds.find(s => s.id === soundId);
+            if (custom) src = custom.data;
+        }
+
+        this.audio.src = src;
+        this.audio.volume = this.volume;
+        this.audio.loop = true;
+        this.audio.play().catch(e => console.error("Audio play failed", e));
+
+        document.dispatchEvent(new CustomEvent('timer-ring', { detail: { label } }));
+    }
+
     stopAlarm(alarmId) {
         if (alarmId) {
             this.ringingAlarms.delete(alarmId);
         }
 
         if (this.ringingAlarms.size === 0) {
-            this.audio.pause();
-            this.audio.currentTime = 0;
-            this.audio.loop = false;
+            this.stopAudio();
         }
+    }
+
+    stopAudio() {
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        this.audio.loop = false;
     }
 
     snoozeAlarm(alarmId) {

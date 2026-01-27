@@ -5,9 +5,10 @@ import { Alarm } from './components/Alarm.js';
 import { Stopwatch } from './components/Stopwatch.js';
 import { Timer } from './components/Timer.js';
 import { alarmManager } from './modules/AlarmManager.js';
+import { timerManager } from './modules/TimerManager.js';
 import { showModal } from './utils/modal.js';
 
-alarmManager.init(); // Inicia checagem de alarmes
+alarmManager.init();
 
 function onAlarmRing(e) {
   const { alarm, isSnooze } = e.detail;
@@ -45,6 +46,35 @@ function onAlarmRing(e) {
 }
 
 document.addEventListener('alarm-ring', onAlarmRing);
+
+function onTimerRing(e) {
+  const { label } = e.detail;
+  const overlay = showModal({
+    title: 'Timer',
+    content: `
+              <div style="text-align:center;">
+                  <h1 style="font-size:34px; margin:20px 0;">${label}</h1>
+                  <p style="color:var(--text-secondary); font-size:24px;">Time is up!</p>
+              </div>
+          `,
+    onSave: () => {
+      alarmManager.stopAudio(); // Para o som
+    }
+  });
+
+  // Estilo similar ao alarme
+  overlay.querySelector('.cancel').style.display = 'none';
+  overlay.onclick = null;
+
+  const saveBtn = overlay.querySelector('.modal-btn.save');
+  if (saveBtn) {
+    saveBtn.textContent = 'Stop';
+    saveBtn.style.background = 'var(--accent-red)';
+    saveBtn.style.color = 'white';
+  }
+}
+
+document.addEventListener('timer-ring', onTimerRing);
 
 
 const app = document.querySelector('#app');
