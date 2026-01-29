@@ -67,6 +67,64 @@ class TimerManager {
         localStorage.setItem('timer-state', JSON.stringify(state));
     }
 
+    loadRecents() {
+        try {
+            const saved = localStorage.getItem('timer-recents');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            console.error('Failed to load recent timers', e);
+            return [];
+        }
+    }
+
+    saveRecents(recents) {
+        localStorage.setItem('timer-recents', JSON.stringify(recents));
+        this.notify('recents-updated');
+    }
+
+    getRecents() {
+        return this.loadRecents();
+    }
+
+    addRecentTimer(historyItem) {
+        let recents = this.loadRecents();
+
+        const existingIndex = recents.findIndex(r =>
+            r.hours === historyItem.hours &&
+            r.minutes === historyItem.minutes &&
+            r.seconds === historyItem.seconds &&
+            r.label === historyItem.label &&
+            r.soundId === historyItem.soundId
+        );
+
+        if (existingIndex !== -1) {
+            recents.splice(existingIndex, 1);
+        }
+
+        recents.unshift({ ...historyItem, id: Date.now().toString(), timestamp: Date.now() });
+
+        if (recents.length > 20) {
+            recents = recents.slice(0, 20);
+        }
+
+        this.saveRecents(recents);
+    }
+
+    updateRecentTimer(id, updates) {
+        let recents = this.loadRecents();
+        const index = recents.findIndex(r => r.id === id);
+        if (index !== -1) {
+            recents[index] = { ...recents[index], ...updates };
+            this.saveRecents(recents);
+        }
+    }
+
+    deleteRecentTimer(id) {
+        let recents = this.loadRecents();
+        recents = recents.filter(r => r.id !== id);
+        this.saveRecents(recents);
+    }
+
     start(h, m, s, label, soundId) {
         this.totalSeconds = h * 3600 + m * 60 + s;
         if (this.totalSeconds <= 0) return;
@@ -80,6 +138,8 @@ class TimerManager {
         this.soundId = soundId;
         this.isRunning = true;
         this.isPaused = false;
+
+        this.addRecentTimer({ hours: h, minutes: m, seconds: s, label, soundId });
 
         this.startTicking();
         this.saveState();
