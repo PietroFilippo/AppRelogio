@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clock-app-v1';
+const CACHE_NAME = 'clock-app-v2';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -30,7 +30,7 @@ self.addEventListener('fetch', (event) => {
                     return response;
                 }
 
-                // Clone a resposta
+                // Clona a resposta
                 const responseToCache = response.clone();
 
                 caches.open(CACHE_NAME).then((cache) => {
