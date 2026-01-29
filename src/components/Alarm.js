@@ -112,6 +112,25 @@ export function Alarm() {
   function openAudioSettingsModal() {
     const volume = alarmManager.getVolume();
     const customSounds = alarmManager.getCustomSounds();
+    const limit = window.electronAPI ? 20 : 10;
+
+    // Rastreia o estado do áudio localmente para a modal
+    let previewAudio = null;
+    let playingId = null;
+
+    // Helper pra parar a prévia atual e liberar o bloqueio do arquivo (crucial para o delete no Electron)
+    const stopPreview = () => {
+      if (previewAudio) {
+        previewAudio.pause();
+        previewAudio.currentTime = 0;
+        // libera a fonte para evitar EBUSY no delete
+        previewAudio.src = '';
+        previewAudio.load();
+        previewAudio = null;
+      }
+      playingId = null;
+      renderAudioState(); // Update icons
+    };
 
     const content = `
         <div class="audio-settings">
@@ -124,90 +143,207 @@ export function Alarm() {
                 </div>
             </div>
 
-            <label style="display:block; margin-bottom:10px;">Custom Sounds (${customSounds.length}/10)</label>
+            <label style="display:block; margin-bottom:10px;">Custom Sounds (${customSounds.length}/${limit})</label>
             <div class="custom-sound-list" id="custom-sound-list">
-                ${customSounds.map(s => `
-                    <div class="custom-sound-item">
-                        <span class="custom-sound-name">${s.name}</span>
-                        <div class="sound-actions">
-                            <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}">▶</button>
-                            <button class="sound-btn delete" data-id="${s.id}">🗑</button>
-                        </div>
-                    </div>
-                `).join('')}
-                ${customSounds.length === 0 ? '<div style="text-align:center; color:#555; padding:10px;">No custom sounds</div>' : ''}
+                ${renderSoundListHTML(customSounds)}
             </div>
 
-            ${customSounds.length < 10 ? `
+            ${(window.electronAPI && customSounds.length < 20) || (!window.electronAPI && customSounds.length < 10) ? `
             <div class="file-input-wrapper">
-                <div class="upload-btn">Upload Sound (Max 2MB)</div>
+                <div class="upload-btn">Upload Sound (Max ${window.electronAPI ? '100MB' : '2MB'})</div>
                 <input type="file" id="sound-upload" accept="audio/*">
             </div>
-            ` : '<div style="text-align:center; color:var(--accent-red);">Limit reached (10/10)</div>'}
+            ` : `<div style="text-align:center; color:var(--accent-red);">Limit reached (${window.electronAPI ? '20/20' : '10/10'})</div>`}
         </div>
       `;
+
+    function renderSoundListHTML(sounds) {
+      if (sounds.length === 0) return '<div style="text-align:center; color:#555; padding:10px;">No custom sounds</div>';
+
+      return sounds.map(s => `
+            <div class="custom-sound-item" id="sound-item-${s.id}">
+                <span class="custom-sound-name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
+                <div class="sound-actions">
+                    <button class="sound-btn reset-preview" data-id="${s.id}" title="Reset">⏮</button>
+                    <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}" title="Play/Pause">▶</button>
+                    <button class="sound-btn delete" data-id="${s.id}" title="Delete">🗑</button>
+                </div>
+            </div>
+        `).join('');
+    }
 
     const overlay = showModal({
       title: 'Audio Settings',
       content,
-      onSave: () => { } // Save is unnecessary as changes are instant, but button closes modal
+      onSave: () => {
+        stopPreview();
+      }
     });
 
-    // Hide Cancel/Save buttons or rename Save to Close?
-    // "Save" button acts as Close here. We can rename it.
     overlay.querySelector('.modal-btn.save').textContent = 'Done';
     overlay.querySelector('.modal-btn.cancel').style.display = 'none';
 
-    // Attach Listeners
+    // Helper para atualizar os ícones de play baseados no estado
+    function renderAudioState() {
+      const list = overlay.querySelector('#custom-sound-list');
+      list.querySelectorAll('.play-preview').forEach(btn => {
+        const id = btn.dataset.id;
+        if (id === playingId && previewAudio && !previewAudio.paused) {
+          btn.textContent = '⏸';
+        } else {
+          btn.textContent = '▶';
+        }
+      });
+    }
+
+    // Anexa os listeners
     const volumeSlider = overlay.querySelector('#master-volume');
     volumeSlider.oninput = (e) => {
-      alarmManager.setVolume(Number(e.target.value));
+      const newVol = Number(e.target.value);
+      alarmManager.setVolume(newVol);
+      if (previewAudio) {
+        previewAudio.volume = newVol;
+      }
     };
 
-    // Upload
+    // Lógica de upload
     const uploadInput = overlay.querySelector('#sound-upload');
     if (uploadInput) {
       uploadInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (file.size > 2 * 1024 * 1024) { // 2MB
-          alert('File too large (Max 2MB)');
+        const maxSize = window.electronAPI ? 100 * 1024 * 1024 : 2 * 1024 * 1024;
+        if (file.size > maxSize) {
+          alert(`File too large (Max ${window.electronAPI ? '100MB' : '2MB'})`);
           return;
         }
 
-        const reader = new FileReader();
-        reader.onload = (loadEvent) => {
-          const base64 = loadEvent.target.result;
-          const name = file.name.split('.')[0]; // remove extension for label
-          if (alarmManager.addCustomSound(name, base64)) {
-            overlay.remove(); // Close and re-open to refresh list (lazy way)
-            openAudioSettingsModal(); // Re-open
+        const handleResult = (soundData) => {
+          const name = file.name.split('.')[0];
+          stopPreview();
+          const success = alarmManager.addCustomSound(name, soundData);
+          if (success && success.then) {
+            success.then((res) => { if (res) refreshList(); });
+          } else if (success) {
+            refreshList();
           }
         };
-        reader.readAsDataURL(file);
+
+        if (window.electronAPI && file.path) {
+          // usa o caminho do arquivo diretamente
+          handleResult(file.path);
+        } else {
+          // fallback do navegador
+          const reader = new FileReader();
+          reader.onload = (loadEvent) => {
+            handleResult(loadEvent.target.result);
+          };
+          reader.readAsDataURL(file);
+        }
       };
     }
 
-    // List Actions
-    overlay.querySelectorAll('.play-preview').forEach(btn => {
-      btn.onclick = () => {
-        const src = btn.dataset.src;
-        const audio = new Audio(src);
-        audio.volume = alarmManager.getVolume();
-        audio.play();
-      };
-    });
+    function refreshList() {
+      const listContainer = overlay.querySelector('#custom-sound-list');
+      const customSounds = alarmManager.getCustomSounds();
+      listContainer.innerHTML = renderSoundListHTML(customSounds);
+      attachListListeners();
 
-    overlay.querySelectorAll('.delete').forEach(btn => {
-      btn.onclick = () => {
-        if (confirm('Delete this sound?')) {
-          alarmManager.deleteCustomSound(btn.dataset.id);
-          overlay.remove();
-          openAudioSettingsModal();
-        }
-      };
-    });
+      // atualiza o label do limite
+      const reached = (window.electronAPI && customSounds.length >= 20) || (!window.electronAPI && customSounds.length >= 10);
+      const label = overlay.querySelector('label[style="display:block; margin-bottom:10px;"]');
+      if (label) label.textContent = `Custom Sounds (${customSounds.length}/${limit})`;
+
+      // atualiza a seção de upload se o limite foi atingido/liberado
+      const audioSettings = overlay.querySelector('.audio-settings');
+      const existingUpload = audioSettings.querySelector('.file-input-wrapper');
+      const existingLimitText = audioSettings.querySelector('div[style*="text-align:center"]');
+
+      if (!reached && !existingUpload) {
+        if (existingLimitText) existingLimitText.remove();
+        const html = `
+          <div class="file-input-wrapper">
+              <div class="upload-btn">Upload Sound (Max ${window.electronAPI ? '100MB' : '2MB'})</div>
+              <input type="file" id="sound-upload" accept="audio/*">
+          </div>`;
+        audioSettings.insertAdjacentHTML('beforeend', html);
+        // Revincula o novo input de upload
+        const newInp = audioSettings.querySelector('#sound-upload');
+        newInp.onchange = uploadInput.onchange;
+      } else if (reached && existingUpload) {
+        existingUpload.remove();
+        const html = `<div style="text-align:center; color:var(--accent-red);">Limit reached (${window.electronAPI ? '20/20' : '10/10'})</div>`;
+        audioSettings.insertAdjacentHTML('beforeend', html);
+      }
+    }
+
+    function attachListListeners() {
+      const listContainer = overlay.querySelector('#custom-sound-list');
+
+      // Play/Pause
+      listContainer.querySelectorAll('.play-preview').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          const src = btn.dataset.src;
+
+          if (playingId === id && previewAudio) {
+            // Toggle
+            if (previewAudio.paused) {
+              previewAudio.play();
+            } else {
+              previewAudio.pause();
+            }
+            renderAudioState();
+          } else {
+            // Novo som
+            stopPreview(); // Limpa o antigo
+            playingId = id;
+            previewAudio = new Audio(src);
+            previewAudio.volume = alarmManager.getVolume();
+            previewAudio.loop = false;
+            previewAudio.onended = () => {
+              renderAudioState();
+            };
+            previewAudio.play().catch(e => console.error(e));
+            renderAudioState();
+          }
+        };
+      });
+
+      // Reset
+      listContainer.querySelectorAll('.reset-preview').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          if (playingId === id && previewAudio) {
+            previewAudio.currentTime = 0;
+            if (previewAudio.paused) previewAudio.play(); // Auto play no reset
+          }
+        };
+      });
+
+      // Delete
+      listContainer.querySelectorAll('.delete').forEach(btn => {
+        btn.onclick = () => {
+          if (confirm('Delete this sound?')) {
+            const id = btn.dataset.id;
+            // Precisa parar o preview para liberar o arquivo
+            if (playingId === id) {
+              stopPreview();
+            }
+
+            const result = alarmManager.deleteCustomSound(id);
+            if (result && result.then) {
+              result.then(() => refreshList());
+            } else {
+              refreshList();
+            }
+          }
+        };
+      });
+    }
+
+    attachListListeners();
   }
 
   function openAlarmModal(existingId = null) {

@@ -1,3 +1,5 @@
+import { timerManager } from './TimerManager.js';
+
 export class AlarmManager {
     constructor() {
         this.alarms = JSON.parse(localStorage.getItem('alarms')) || [];
@@ -21,6 +23,29 @@ export class AlarmManager {
         }
 
         this.startMonitoring();
+        this.setupIPCListeners();
+    }
+
+    setupIPCListeners() {
+        if (window.electronAPI && window.electronAPI.onNotificationAction) {
+            window.electronAPI.onNotificationAction((data) => {
+                console.log('Notification Action:', data);
+                if (data.action === 'stop') {
+                    if (data.id === 'timer') {
+                        this.stopAudio(); // Stop genérico pro timer
+                        document.dispatchEvent(new CustomEvent('timer-stop-requested'));
+                    } else {
+                        this.stopAlarm(Number(data.id));
+                        document.dispatchEvent(new CustomEvent('alarm-stop-requested', { detail: { id: Number(data.id) } }));
+                    }
+                } else if (data.action === 'snooze') {
+                    if (data.id !== 'timer') {
+                        this.snoozeAlarm(Number(data.id));
+                        document.dispatchEvent(new CustomEvent('alarm-snooze-requested', { detail: { id: Number(data.id) } }));
+                    }
+                }
+            });
+        }
     }
 
     startMonitoring() {
@@ -63,14 +88,15 @@ export class AlarmManager {
         });
     }
 
-    triggerAlarm(alarm, isSnooze = false) {
+    async triggerAlarm(alarm, isSnooze = false) {
         if (this.ringingAlarms.has(alarm.id)) return;
 
         this.ringingAlarms.add(alarm.id);
 
-        if (this.permissionsGranted) {
-            new Notification('Alarm', { body: alarm.label || 'Time is up!' });
-        }
+        await this.handleNotification('Alarm', alarm.label || 'Time is up!', {
+            snoozeEnabled: alarm.snoozeEnabled,
+            id: alarm.id
+        });
 
         // Determina fonte de áudio
         let src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'; // Fallback default
@@ -95,10 +121,11 @@ export class AlarmManager {
         document.dispatchEvent(new CustomEvent('alarm-ring', { detail: { alarm, isSnooze } }));
     }
 
-    triggerTimer(label, soundId) {
-        if (this.permissionsGranted) {
-            new Notification('Timer Finished', { body: label || 'Time is up!' });
-        }
+    async triggerTimer(label, soundId) {
+        await this.handleNotification('Timer Finished', label || 'Time is up!', {
+            snoozeEnabled: false,
+            id: 'timer'
+        });
 
         let src = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
         if (soundId !== 'default' && soundId) {
@@ -114,6 +141,59 @@ export class AlarmManager {
         document.dispatchEvent(new CustomEvent('timer-ring', { detail: { label } }));
     }
 
+    async handleNotification(title, body) {
+        if (!this.permissionsGranted) return;
+
+        let type = 'system';
+        if (window.electronAPI) {
+            const settings = await window.electronAPI.getSettings();
+            type = settings.notificationType || 'both';
+        }
+
+        if (type === 'system' || type === 'both') {
+            new Notification(title, { body });
+        }
+
+        if (type === 'app' || type === 'both') {
+            if (window.electronAPI) {
+                // Passa o ID para saber o que parar
+                // Pra Alarmes, usa o ID do alarme. Pra Timers, pode precisar de uma flag
+                // é passado { id: 'timer' } ou { id: alarm.id }
+                let idPayload = null;
+                if (title === 'Timer Finished') {
+                    idPayload = 'timer';
+                } else {
+                }
+
+            }
+        }
+    }
+
+    async handleNotification(title, body, data = {}) {
+        if (!this.permissionsGranted) return;
+
+        let type = 'system';
+        if (window.electronAPI) {
+            const settings = await window.electronAPI.getSettings();
+            type = settings.notificationType || 'both';
+        }
+
+        if (type === 'system' || type === 'both') {
+            new Notification(title, { body });
+        }
+
+        if (type === 'app' || type === 'both') {
+            if (window.electronAPI) {
+                window.electronAPI.showCustomNotification({
+                    title,
+                    body,
+                    snoozeEnabled: data.snoozeEnabled,
+                    id: data.id
+                });
+            }
+        }
+    }
+
     stopAlarm(alarmId) {
         if (alarmId) {
             this.ringingAlarms.delete(alarmId);
@@ -122,12 +202,20 @@ export class AlarmManager {
         if (this.ringingAlarms.size === 0) {
             this.stopAudio();
         }
+
+        if (window.electronAPI) {
+            window.electronAPI.closeCustomNotification();
+        }
     }
 
     stopAudio() {
         this.audio.pause();
         this.audio.currentTime = 0;
         this.audio.loop = false;
+
+        if (window.electronAPI) {
+            window.electronAPI.closeCustomNotification();
+        }
     }
 
     snoozeAlarm(alarmId) {
@@ -211,24 +299,71 @@ export class AlarmManager {
         localStorage.setItem('alarmVolume', this.volume);
     }
 
-    addCustomSound(name, data) {
-        if (this.customSounds.length >= 10) {
-            alert('Maximum of 10 custom sounds allowed.');
-            return false;
+    async addCustomSound(name, data) {
+        // Platform check: Electron ou Browser
+        const isElectron = !!window.electronAPI;
+
+        if (!isElectron) {
+            // Limite do browser
+            if (this.customSounds.length >= 10) {
+                alert('Maximum of 10 custom sounds allowed in browser mode.');
+                return false;
+            }
+        } else {
+            // Limite do Electron
+            if (this.customSounds.length >= 20) {
+                alert('Maximum of 20 custom sounds allowed in desktop mode.');
+                return false;
+            }
         }
+
+        let soundData = data;
+
+        if (isElectron) {
+            try {
+                // se parecer com um caminho de arquivo (e não base64), use cópia direta
+                if (typeof data === 'string' && !data.startsWith('data:')) {
+                    const savedPath = await window.electronAPI.copySoundFile(data, name + '.mp3');
+                    soundData = savedPath;
+                } else {
+                    const base64Data = data.split(',')[1];
+                    const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+                    const savedPath = await window.electronAPI.saveFile(name + '.mp3', buffer);
+                    soundData = savedPath;
+                }
+            } catch (err) {
+                console.error('Failed to save file natively:', err);
+                alert('Failed to save sound file.');
+                return false;
+            }
+        }
+
         const newSound = {
             id: 'custom_' + Date.now(),
             name: name,
-            data: data
+            data: soundData,
+            isNative: isElectron
         };
+
         this.customSounds.push(newSound);
         this.saveCustomSounds();
         return true;
     }
 
-    deleteCustomSound(id) {
+    async deleteCustomSound(id) {
+        const sound = this.customSounds.find(s => s.id === id);
+        if (sound && sound.isNative && window.electronAPI) {
+            try {
+                // espera a deleção do arquivo
+                await window.electronAPI.deleteFile(sound.data);
+            } catch (e) {
+                console.warn("Could not delete physical file", e);
+            }
+        }
+
         this.customSounds = this.customSounds.filter(s => s.id !== id);
         this.saveCustomSounds();
+        return true;
     }
 
     saveCustomSounds() {

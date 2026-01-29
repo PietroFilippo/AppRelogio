@@ -14,10 +14,18 @@ class TimerManager {
         this.initialMinutes = 0;
         this.initialSeconds = 0;
 
+
         this.loadState();
         if (this.isRunning && !this.isPaused) {
             this.startTicking();
         }
+
+        // Listener para alterações de configurações para atualizar o bloqueador de energia imediatamente
+        document.addEventListener('settings-updated', (e) => {
+            if (e.detail.key === 'preventSuspend') {
+                this.updatePowerBlocker();
+            }
+        });
     }
 
     loadState() {
@@ -125,6 +133,19 @@ class TimerManager {
         this.saveRecents(recents);
     }
 
+    async updatePowerBlocker() {
+        if (window.electronAPI) {
+            const settings = await window.electronAPI.getSettings();
+            if (settings.preventSuspend) {
+                // se timer estiver rodando e não pausado, bloqueia a energia
+                const shouldBlock = this.isRunning && !this.isPaused;
+                window.electronAPI.setPowerBlocker(shouldBlock);
+            } else {
+                window.electronAPI.setPowerBlocker(false);
+            }
+        }
+    }
+
     start(h, m, s, label, soundId) {
         this.totalSeconds = h * 3600 + m * 60 + s;
         if (this.totalSeconds <= 0) return;
@@ -144,6 +165,7 @@ class TimerManager {
         this.startTicking();
         this.saveState();
         this.notify();
+        this.updatePowerBlocker();
     }
 
     startTicking() {
@@ -167,12 +189,14 @@ class TimerManager {
         this.isPaused = true;
         this.saveState();
         this.notify();
+        this.updatePowerBlocker();
     }
 
     resume() {
         this.isPaused = false;
         this.saveState();
         this.notify();
+        this.updatePowerBlocker();
     }
 
     cancel() {
@@ -182,6 +206,7 @@ class TimerManager {
         this.remainingSeconds = 0;
         this.saveState();
         this.notify();
+        this.updatePowerBlocker();
     }
 
     finish() {
@@ -189,6 +214,7 @@ class TimerManager {
         this.isRunning = false;
         this.isPaused = false;
         this.saveState();
+        this.updatePowerBlocker();
 
         alarmManager.triggerTimer(this.label, this.soundId);
         this.notify('timer-finished');

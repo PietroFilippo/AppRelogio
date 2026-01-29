@@ -4,11 +4,16 @@ import { WorldClock } from './components/WorldClock.js';
 import { Alarm } from './components/Alarm.js';
 import { Stopwatch } from './components/Stopwatch.js';
 import { Timer } from './components/Timer.js';
+import { Settings } from './components/Settings.js';
 import { alarmManager } from './modules/AlarmManager.js';
 import { timerManager } from './modules/TimerManager.js';
 import { showModal } from './utils/modal.js';
 
 alarmManager.init();
+
+
+// Helper pra rastrear o modal aberto
+let currentOverlay = null;
 
 function onAlarmRing(e) {
   const { alarm, isSnooze } = e.detail;
@@ -16,20 +21,23 @@ function onAlarmRing(e) {
     title: alarm.label || '',
     content: `
               <div style="text-align:center;">
-                  <h1 style="font-size:60px; margin:20px 0;">${alarm.time}</h1>
+                  <h1 style="font-size:60px; margin:20px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; display:block;">${alarm.time}</h1>
                   ${alarm.snoozeEnabled ? `<button class="modal-btn snooze-btn" style="background:var(--accent-orange); color:black; width:100%; margin-bottom:10px;">Snooze (${alarm.snoozeInterval || 9} min)</button>` : ''}
               </div>
           `,
     onSave: () => {
       alarmManager.stopAlarm(alarm.id);
+      currentOverlay = null;
     }
   });
+  currentOverlay = { element: overlay, type: 'alarm', id: alarm.id };
 
   const snoozeBtn = overlay.querySelector('.snooze-btn');
   if (snoozeBtn) {
     snoozeBtn.onclick = () => {
       alarmManager.snoozeAlarm(alarm.id);
       overlay.remove();
+      currentOverlay = null;
     };
   }
 
@@ -53,14 +61,17 @@ function onTimerRing(e) {
     title: 'Timer',
     content: `
               <div style="text-align:center;">
-                  <h1 style="font-size:34px; margin:20px 0;">${label}</h1>
+                  <h1 style="font-size:34px; margin:20px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; display:block; padding: 0 10px;">${label}</h1>
                   <p style="color:var(--text-secondary); font-size:24px;">Time is up!</p>
               </div>
           `,
     onSave: () => {
       alarmManager.stopAudio(); // Para o som
+      currentOverlay = null;
     }
   });
+
+  currentOverlay = { element: overlay, type: 'timer' };
 
   // Estilo similar ao alarme
   overlay.querySelector('.cancel').style.display = 'none';
@@ -75,6 +86,28 @@ function onTimerRing(e) {
 }
 
 document.addEventListener('timer-ring', onTimerRing);
+
+// Listener pra requisições externas de parada (ex: de Notificação)
+document.addEventListener('timer-stop-requested', () => {
+  if (currentOverlay && currentOverlay.type === 'timer') {
+    currentOverlay.element.remove();
+    currentOverlay = null;
+  }
+});
+
+document.addEventListener('alarm-stop-requested', (e) => {
+  if (currentOverlay && currentOverlay.type === 'alarm' && currentOverlay.id === e.detail.id) {
+    currentOverlay.element.remove();
+    currentOverlay = null;
+  }
+});
+
+document.addEventListener('alarm-snooze-requested', (e) => {
+  if (currentOverlay && currentOverlay.type === 'alarm' && currentOverlay.id === e.detail.id) {
+    currentOverlay.element.remove();
+    currentOverlay = null;
+  }
+});
 
 
 const app = document.querySelector('#app');
@@ -121,6 +154,7 @@ function updateView() {
     case 'alarm': componentResult = Alarm(); break;
     case 'stopwatch': componentResult = Stopwatch(); break;
     case 'timer': componentResult = Timer(); break;
+    case 'settings': componentResult = Settings(); break;
     default: componentResult = WorldClock();
   }
 

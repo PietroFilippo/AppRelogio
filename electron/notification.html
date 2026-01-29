@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100vh;
+            box-sizing: border-box;
+            border: 1px solid #333;
+            overflow: hidden;
+            user-select: none;
+            -webkit-app-region: drag;
+            /* Permite arrastar */
+        }
+
+        .header {
+            position: relative;
+            padding-right: 25px;
+            /* Espaço pro botão de fechar */
+        }
+
+        h2 {
+            margin: 0 0 5px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #ff9f1c;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        p {
+            margin: 0;
+            font-size: 14px;
+            color: #cccccc;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 5px;
+            line-height: 1;
+            -webkit-app-region: no-drag;
+            z-index: 10;
+        }
+
+        .close-btn:hover {
+            color: #fff;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            -webkit-app-region: no-drag;
+        }
+
+        button {
+            flex: 1;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .btn-stop {
+            background-color: #ef476f;
+            color: white;
+        }
+
+        .btn-snooze {
+            background-color: #ff9f1c;
+            color: #1a1a1a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h2 id="title">Alarm</h2>
+        <p id="message">Time is up!</p>
+        <button class="close-btn" id="close">×</button>
+    </div>
+
+    <div class="actions">
+        <button id="snooze" class="btn-snooze" style="display: none;">Snooze</button>
+        <button id="stop" class="btn-stop">Stop</button>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        // Analisa os parâmetros de URL
+        const params = new URLSearchParams(window.location.search);
+        const title = params.get('title');
+        const message = params.get('message');
+        const snoozeEnabled = params.get('snooze') === 'true';
+        const id = params.get('id');
+
+        document.getElementById('title').textContent = title || 'Notification';
+        document.getElementById('message').textContent = message || '';
+
+        const snoozeBtn = document.getElementById('snooze');
+        if (snoozeEnabled) {
+            snoozeBtn.style.display = 'block';
+            snoozeBtn.onclick = () => {
+                ipcRenderer.send('notification-action', { action: 'snooze', id });
+                window.close();
+            };
+        }
+
+        document.getElementById('stop').onclick = () => {
+            ipcRenderer.send('notification-action', { action: 'stop', id });
+            window.close();
+        };
+
+        document.getElementById('close').onclick = () => {
+            window.close();
+        };
+    </script>
+</body>
+
+</html>
