@@ -24,7 +24,7 @@ let appSettings = {
     notificationPosition: 'bottom-right',
     minimizeToTray: true,
     showTimerInTray: false,
-    notificationDuration: 30 // seconds, 0 for never
+    notificationDuration: 30 // segundos, 0 para nunca
 };
 
 try {
@@ -55,15 +55,19 @@ function createWindow() {
     win = new BrowserWindow({
         width: 900,
         height: 700,
-        frame: false, // Custom Title Bar
+        frame: false, // Barra de título customizada
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js')
         },
         autoHideMenuBar: true,
-        icon: iconPath
+        icon: iconPath,
+        show: false // Mostra manualmente depois de maximizar
     });
+
+    win.maximize();
+    win.show();
 
     // Carrega dev/prod
     if (process.env.VITE_DEV_SERVER_URL) {
@@ -218,7 +222,7 @@ ipcMain.handle('show-custom-notification', (event, data) => {
         }
     });
 
-    // Build query string
+    // Monta query string
     const params = new URLSearchParams({
         title: data.title,
         message: data.body,
@@ -332,14 +336,17 @@ ipcMain.handle('exit-app', () => {
     app.quit();
 });
 
-// Window Controls
+// Controles da janela
 ipcMain.on('window-minimize', () => {
     if (win) win.minimize();
 });
 
 ipcMain.on('window-maximize', () => {
     if (win) {
-        if (win.isMaximized()) {
+        if (win.isFullScreen()) {
+            win.setFullScreen(false);
+            win.maximize();
+        } else if (win.isMaximized()) {
             win.unmaximize();
         } else {
             win.maximize();

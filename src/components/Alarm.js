@@ -1,5 +1,6 @@
 import { alarmManager } from '../modules/AlarmManager.js';
 import { showModal } from '../utils/modal.js';
+import { showAlert, showConfirm, truncate } from '../utils/notification.js';
 
 export function Alarm() {
   const container = document.createElement('div');
@@ -99,11 +100,19 @@ export function Alarm() {
 
     if (isEditing) {
       container.querySelectorAll('.delete-clock-btn').forEach(btn => {
-        btn.onclick = (e) => {
+        btn.onclick = async (e) => {
           e.stopPropagation();
           const id = Number(e.currentTarget.dataset.id);
-          alarmManager.deleteAlarm(id);
-          render();
+          const alarm = alarmManager.getAlarms().find(a => a.id === id);
+          const label = alarm && alarm.label ? alarm.label : 'Alarm';
+          const confirmMsg = alarm && alarm.label
+            ? `Delete "${truncate(label)}"?`
+            : `Delete alarm for ${alarm ? alarm.time : 'this time'}?`;
+
+          if (await showConfirm(confirmMsg, 'Delete Alarm')) {
+            alarmManager.deleteAlarm(id);
+            render();
+          }
         };
       });
     }
@@ -177,6 +186,7 @@ export function Alarm() {
       content,
       onSave: () => {
         stopPreview();
+        render();
       }
     });
 
@@ -215,7 +225,7 @@ export function Alarm() {
 
         const maxSize = window.electronAPI ? 100 * 1024 * 1024 : 2 * 1024 * 1024;
         if (file.size > maxSize) {
-          alert(`File too large (Max ${window.electronAPI ? '100MB' : '2MB'})`);
+          showAlert(`File too large (Max ${window.electronAPI ? '100MB' : '2MB'})`, 'Upload Failed');
           return;
         }
 
@@ -241,6 +251,9 @@ export function Alarm() {
           };
           reader.readAsDataURL(file);
         }
+
+        // Reseta valor pra permitir upload do mesmo arquivo novamente
+        e.target.value = '';
       };
     }
 
@@ -324,8 +337,8 @@ export function Alarm() {
 
       // Delete
       listContainer.querySelectorAll('.delete').forEach(btn => {
-        btn.onclick = () => {
-          if (confirm('Delete this sound?')) {
+        btn.onclick = async () => {
+          if (await showConfirm('Delete this sound?', 'Delete Sound')) {
             const id = btn.dataset.id;
             // Precisa parar o preview para liberar o arquivo
             if (playingId === id) {
@@ -351,7 +364,7 @@ export function Alarm() {
       time: '08:00',
       label: '',
       repeat: [],
-      sound: 'default',
+      sound: alarmManager.getLastUsedSound(),
       snoozeEnabled: true,
       snoozeInterval: 5
     };
@@ -387,7 +400,7 @@ export function Alarm() {
                     <span>Sound</span>
                     <select id="modal-sound">
                         <option value="default" ${alarm.sound === 'default' ? 'selected' : ''}>Radar (Default)</option>
-                        ${customSounds.map(s => `<option value="${s.id}" ${alarm.sound === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                        ${customSounds.map(s => `<option value="${s.id}" ${alarm.sound === s.id ? 'selected' : ''}>${truncate(s.name, 20)}</option>`).join('')}
                     </select>
                 </div>
                 <div class="modal-row">
@@ -437,6 +450,7 @@ export function Alarm() {
         } else {
           alarmManager.addAlarm(data);
         }
+        alarmManager.setLastUsedSound(sound);
         render();
       }
     });

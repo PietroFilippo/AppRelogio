@@ -1,6 +1,7 @@
 import { alarmManager } from '../modules/AlarmManager.js';
 import { timerManager } from '../modules/TimerManager.js';
 import { showModal } from '../utils/modal.js';
+import { showAlert, showConfirm, truncate } from '../utils/notification.js';
 
 export function Timer() {
     const container = document.createElement('div');
@@ -56,11 +57,15 @@ export function Timer() {
         });
 
         container.querySelectorAll('.delete-recent-btn').forEach(btn => {
-            btn.onclick = (e) => {
+            btn.onclick = async (e) => {
                 e.stopPropagation();
                 const id = e.currentTarget.dataset.id;
-                timerManager.deleteRecentTimer(id);
-                render();
+                const recent = recents.find(r => r.id === id);
+                const label = recent ? (recent.label || 'Timer') : 'this timer';
+                if (await showConfirm(`Delete "${truncate(label)}" from recents?`, 'Delete Recent')) {
+                    timerManager.deleteRecentTimer(id);
+                    render();
+                }
             };
         });
     }
@@ -96,8 +101,8 @@ export function Timer() {
           <div class="modal-row">
               <span>When Timer Ends</span>
               <select id="timer-sound" style="border: none; background: transparent; color: var(--text-secondary); font-size: 16px; outline: none; cursor: pointer;">
-                  <option value="default" ${state.soundId === 'default' ? 'selected' : ''}>Radar (Default)</option>
-                  ${customSounds.map(s => `<option value="${s.id}" ${state.soundId === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                  <option value="default" ${(state.soundId || alarmManager.getLastUsedSound()) === 'default' ? 'selected' : ''}>Radar (Default)</option>
+                  ${customSounds.map(s => `<option value="${s.id}" ${(state.soundId || alarmManager.getLastUsedSound()) === s.id ? 'selected' : ''}>${truncate(s.name, 20)}</option>`).join('')}
               </select>
           </div>
       </div>
@@ -192,7 +197,7 @@ export function Timer() {
                     <span>Sound</span>
                     <select id="modal-sound">
                         <option value="default" ${recent.soundId === 'default' ? 'selected' : ''}>Radar (Default)</option>
-                        ${customSounds.map(s => `<option value="${s.id}" ${recent.soundId === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+                        ${customSounds.map(s => `<option value="${s.id}" ${recent.soundId === s.id ? 'selected' : ''}>${truncate(s.name, 20)}</option>`).join('')}
                     </select>
                 </div>
             </div>
@@ -209,6 +214,7 @@ export function Timer() {
                 const soundId = overlay.querySelector('#modal-sound').value;
 
                 timerManager.updateRecentTimer(id, { hours, minutes, seconds, label, soundId });
+                alarmManager.setLastUsedSound(soundId);
                 render();
             }
         });
@@ -293,6 +299,7 @@ export function Timer() {
             content,
             onSave: () => {
                 stopPreview();
+                render();
             }
         });
 
@@ -328,7 +335,7 @@ export function Timer() {
 
                 const maxSize = window.electronAPI ? 100 * 1024 * 1024 : 2 * 1024 * 1024;
                 if (file.size > maxSize) {
-                    alert(`File too large (Max ${window.electronAPI ? '100MB' : '2MB'})`);
+                    showAlert(`File too large (Max ${window.electronAPI ? '100MB' : '2MB'})`, 'Upload Failed');
                     return;
                 }
 
@@ -352,6 +359,9 @@ export function Timer() {
                     };
                     reader.readAsDataURL(file);
                 }
+
+                // Reseta valor ara permitir upload do mesmo arquivo novamente
+                e.target.value = '';
             };
         }
 
@@ -429,8 +439,8 @@ export function Timer() {
             });
 
             listContainer.querySelectorAll('.delete').forEach(btn => {
-                btn.onclick = () => {
-                    if (confirm('Delete this sound?')) {
+                btn.onclick = async () => {
+                    if (await showConfirm('Delete this sound?', 'Delete Sound')) {
                         const id = btn.dataset.id;
                         if (playingId === id) {
                             stopPreview();
@@ -517,6 +527,7 @@ export function Timer() {
         const label = container.querySelector('#timer-label').value || '';
         const soundId = container.querySelector('#timer-sound').value;
 
+        alarmManager.setLastUsedSound(soundId);
         timerManager.start(h, m, s, label, soundId);
     }
 

@@ -1,5 +1,6 @@
 import { timezones } from '../data/timezones.js';
 import { showModal } from '../utils/modal.js';
+import { showConfirm, truncate } from '../utils/notification.js';
 
 export function WorldClock() {
     const container = document.createElement('div');
@@ -30,9 +31,12 @@ export function WorldClock() {
 
         // Listeners de exclusão
         container.querySelectorAll('.delete-clock-btn').forEach(btn => {
-            btn.onclick = (e) => {
+            btn.onclick = async (e) => {
                 const index = Number(e.currentTarget.dataset.index);
-                deleteClock(index);
+                const clock = clocks[index];
+                if (await showConfirm(`Remove ${truncate(clock.label)}?`, 'Remove Clock')) {
+                    deleteClock(index);
+                }
             };
         });
 

@@ -1,4 +1,5 @@
 import { timerManager } from './TimerManager.js';
+import { showAlert } from '../utils/notification.js';
 
 export class AlarmManager {
     constructor() {
@@ -11,6 +12,7 @@ export class AlarmManager {
         this.audio.volume = this.volume;
         this.snoozedAlarms = {};
         this.ringingAlarms = new Set();
+        this.lastUsedSound = localStorage.getItem('lastUsedSound') || 'default';
     }
 
     init() {
@@ -86,6 +88,15 @@ export class AlarmManager {
                 }
             }
         });
+    }
+
+    getLastUsedSound() {
+        return this.lastUsedSound;
+    }
+
+    setLastUsedSound(soundId) {
+        this.lastUsedSound = soundId;
+        localStorage.setItem('lastUsedSound', soundId);
     }
 
     async triggerAlarm(alarm, isSnooze = false) {
@@ -306,13 +317,13 @@ export class AlarmManager {
         if (!isElectron) {
             // Limite do browser
             if (this.customSounds.length >= 10) {
-                alert('Maximum of 10 custom sounds allowed in browser mode.');
+                showAlert('Maximum of 10 custom sounds allowed in browser mode.', 'Limit Reached');
                 return false;
             }
         } else {
             // Limite do Electron
             if (this.customSounds.length >= 20) {
-                alert('Maximum of 20 custom sounds allowed in desktop mode.');
+                showAlert('Maximum of 20 custom sounds allowed in desktop mode.', 'Limit Reached');
                 return false;
             }
         }
@@ -321,7 +332,7 @@ export class AlarmManager {
 
         if (isElectron) {
             try {
-                // se parecer com um caminho de arquivo (e não base64), use cópia direta
+                // se parecer com um caminho de arquivo (e não base64), usa cópia direta
                 if (typeof data === 'string' && !data.startsWith('data:')) {
                     const savedPath = await window.electronAPI.copySoundFile(data, name + '.mp3');
                     soundData = savedPath;
@@ -333,7 +344,7 @@ export class AlarmManager {
                 }
             } catch (err) {
                 console.error('Failed to save file natively:', err);
-                alert('Failed to save sound file.');
+                showAlert('Failed to save sound file.', 'Error');
                 return false;
             }
         }

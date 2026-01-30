@@ -1,4 +1,5 @@
 import { stopwatchManager } from '../modules/StopwatchManager.js';
+import { showAlert } from '../utils/notification.js';
 
 export function Stopwatch() {
   const container = document.createElement('div');
@@ -14,7 +15,7 @@ export function Stopwatch() {
   let fastestColor = localStorage.getItem('stopwatch-fastest-color') || '#30d158';
   let slowestColor = localStorage.getItem('stopwatch-slowest-color') || '#ff453a';
 
-  // Modal ESC handler
+  // Handler da modal do ESC
   const handleEsc = (e) => {
     if (e.key === 'Escape') {
       if (showColorPicker) {
@@ -445,7 +446,7 @@ export function Stopwatch() {
     // Adiciona uma nova cor personalizada
     addCustomBtn.addEventListener('click', () => {
       if (customColors.length >= 10) {
-        alert('Maximum 10 custom colors reached.');
+        showAlert('Maximum 10 custom colors reached.', 'Limit Reached');
         return;
       }
       const color = hexInput.value;

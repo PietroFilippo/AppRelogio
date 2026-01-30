@@ -1,4 +1,5 @@
 import { showModal } from '../utils/modal.js';
+import { showConfirm } from '../utils/notification.js';
 
 export function Settings() {
     const container = document.createElement('div');
@@ -154,12 +155,14 @@ export function Settings() {
 
         const exitBtn = container.querySelector('#exit-btn');
         if (exitBtn) {
-            exitBtn.onclick = () => {
-                if (window.electronAPI) {
-                    window.electronAPI.exitApp();
-                } else {
-                    // Fallback pro navegador (normalmente não funciona, mas bom para testes)
-                    window.close();
+            exitBtn.onclick = async () => {
+                if (await showConfirm('Are you sure you want to exit the application?', 'Exit App')) {
+                    if (window.electronAPI) {
+                        window.electronAPI.exitApp();
+                    } else {
+                        // Fallback pro navegador (normalmente não funciona, mas bom para testes)
+                        window.close();
+                    }
                 }
             };
         }
