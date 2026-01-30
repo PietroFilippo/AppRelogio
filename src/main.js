@@ -118,10 +118,29 @@ let activeComponentCleanup = null;
 function render() {
   app.innerHTML = `
     <div class="app-container">
+      <div id="title-bar" class="title-bar">
+        <div class="title-bar-drag"></div>
+        <div class="title-bar-controls">
+          <button id="min-btn" class="title-btn">−</button>
+          <button id="max-btn" class="title-btn">▢</button>
+          <button id="close-btn" class="title-btn">×</button>
+        </div>
+      </div>
       <main id="content" class="content-area"></main>
       <footer id="nav-container"></footer>
     </div>
   `;
+
+  // Window Controls Listeners
+  const minBtn = app.querySelector('#min-btn');
+  const maxBtn = app.querySelector('#max-btn');
+  const closeBtn = app.querySelector('#close-btn');
+
+  if (window.electronAPI) {
+    if (minBtn) minBtn.onclick = () => window.electronAPI.minimizeWindow();
+    if (maxBtn) maxBtn.onclick = () => window.electronAPI.maximizeWindow();
+    if (closeBtn) closeBtn.onclick = () => window.electronAPI.closeWindow();
+  }
 
   const navContainer = app.querySelector('#nav-container');
 

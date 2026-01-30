@@ -17,7 +17,7 @@ export function WorldClock() {
       <div class="header">
         <button class="edit-btn" id="edit-clock-btn">${isEditing ? 'Done' : 'Edit'}</button>
         <h1>World Clock</h1>
-        <button class="add-btn" id="add-clock-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}">+</button>
+        <button class="add-btn add-btn-container" id="add-clock-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}">+</button>
       </div>
       <div class="clock-list ${isEditing ? 'edit-mode' : ''}">
         ${clocks.map((clock, index) => createClockHTML(clock, index)).join('')}

@@ -8,16 +8,19 @@ export function Settings() {
     let settings = {
         preventSuspend: false,
         autoLaunch: true,
-        notificationType: 'both',
+        notificationType: 'app',
         minimizeToTray: true,
         showTimerInTray: false,
-        notificationPosition: 'bottom-right'
+        notificationPosition: 'bottom-right',
+        notificationDuration: 30
     };
 
     function render() {
         container.innerHTML = `
             <div class="header">
+                <div style="width: 50px;"></div> <!-- Spacer for edit-btn -->
                 <h1>Settings</h1>
+                <div class="add-btn-container" style="width: 50px;"></div>
             </div>
             
             <div class="settings-list" style="padding: 20px; max-width: 600px; margin: 0 auto;">
@@ -56,6 +59,20 @@ export function Settings() {
                         </select>
                     </div>
                     <div style="font-size: 12px; color: #888; margin-top: 5px;">Where the app notification appears.</div>
+                </div>
+
+                <div class="setting-item" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size: 16px;">Auto-Close Duration</span>
+                        <select id="notificationDuration" style="background: #333; color: white; border: none; padding: 5px 10px; border-radius: 6px; outline: none;">
+                            <option value="0" ${settings.notificationDuration === 0 ? 'selected' : ''}>Never</option>
+                            <option value="5" ${settings.notificationDuration === 5 ? 'selected' : ''}>5 Seconds</option>
+                            <option value="10" ${settings.notificationDuration === 10 ? 'selected' : ''}>10 Seconds</option>
+                            <option value="30" ${settings.notificationDuration === 30 ? 'selected' : ''}>30 Seconds</option>
+                            <option value="60" ${settings.notificationDuration === 60 ? 'selected' : ''}>1 Minute</option>
+                        </select>
+                    </div>
+                    <div style="font-size: 12px; color: #888; margin-top: 5px;">How long the notification stays on screen.</div>
                 </div>
 
                 <div class="setting-item" style="background: rgba(255, 69, 58, 0.1); padding: 15px; border-radius: 12px; margin-top: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;" id="exit-btn">
@@ -120,6 +137,17 @@ export function Settings() {
                 settings.notificationPosition = value;
                 if (window.electronAPI) {
                     await window.electronAPI.saveSetting('notificationPosition', value);
+                }
+            };
+        }
+
+        const durSelect = container.querySelector('#notificationDuration');
+        if (durSelect) {
+            durSelect.onchange = async (e) => {
+                const value = Number(e.target.value);
+                settings.notificationDuration = value;
+                if (window.electronAPI) {
+                    await window.electronAPI.saveSetting('notificationDuration', value);
                 }
             };
         }

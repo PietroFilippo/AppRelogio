@@ -12,5 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showCustomNotification: (data) => ipcRenderer.invoke('show-custom-notification', data),
     closeCustomNotification: () => ipcRenderer.invoke('close-custom-notification'),
     onNotificationAction: (callback) => ipcRenderer.on('notification-action', (event, data) => callback(data)),
-    exitApp: () => ipcRenderer.invoke('exit-app')
+    exitApp: () => ipcRenderer.invoke('exit-app'),
+    minimizeWindow: () => ipcRenderer.send('window-minimize'),
+    maximizeWindow: () => ipcRenderer.send('window-maximize'),
+    closeWindow: () => ipcRenderer.send('window-close')
 });

@@ -17,7 +17,14 @@ export function showModal({ title, content, onSave }) {
 
   const close = () => {
     document.body.removeChild(overlay);
+    window.removeEventListener('keydown', handleEsc);
   };
+
+  const handleEsc = (e) => {
+    if (e.key === 'Escape') close();
+  };
+
+  window.addEventListener('keydown', handleEsc);
 
   overlay.querySelector('.cancel').onclick = close;
   overlay.querySelector('.save').onclick = () => {

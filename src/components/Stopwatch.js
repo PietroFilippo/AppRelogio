@@ -14,6 +14,21 @@ export function Stopwatch() {
   let fastestColor = localStorage.getItem('stopwatch-fastest-color') || '#30d158';
   let slowestColor = localStorage.getItem('stopwatch-slowest-color') || '#ff453a';
 
+  // Modal ESC handler
+  const handleEsc = (e) => {
+    if (e.key === 'Escape') {
+      if (showColorPicker) {
+        showColorPicker = false;
+        render();
+      } else if (showColorSelection) {
+        showColorSelection = false;
+        render();
+      }
+    }
+  };
+
+  window.addEventListener('keydown', handleEsc);
+
   // Carrega as cores personalizadas do localStorage (até 10)
   let customColors = JSON.parse(localStorage.getItem('stopwatch-custom-colors')) || [];
 
@@ -526,7 +541,7 @@ export function Stopwatch() {
     container.innerHTML = `
             <div class="header">
                 <h1>Stopwatch</h1>
-                <button class="add-btn" id="colors-btn" style="font-size: 14px; width: auto; padding: 0 10px;">Colors</button>
+                <button class="add-btn add-btn-container" id="colors-btn" style="font-size: 14px; width: auto; padding: 0 10px;">Colors</button>
             </div>
             <div class="stopwatch-display">${formatTime(state.elapsed)}</div>
             <div class="controls">
@@ -627,6 +642,7 @@ export function Stopwatch() {
     element: container,
     cleanup: () => {
       stopInterval();
+      window.removeEventListener('keydown', handleEsc);
     }
   };
 }

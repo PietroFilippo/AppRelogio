@@ -17,7 +17,7 @@ export function Alarm() {
       <div class="header">
         <button class="edit-btn" id="edit-alarm-btn">${isEditing ? 'Done' : 'Edit'}</button>
         <h1>Alarm</h1>
-        <div style="display: flex; gap: 10px;">
+        <div class="add-btn-container" style="display: flex; gap: 10px;">
             <button class="add-btn" id="audio-settings-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}; font-size: 14px; width: auto; padding: 0 10px;">Sound</button>
             <button class="add-btn" id="add-alarm-btn" style="visibility: ${isEditing ? 'hidden' : 'visible'}">+</button>
         </div>

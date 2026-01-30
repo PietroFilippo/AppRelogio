@@ -20,10 +20,11 @@ if (!fs.existsSync(soundsDir)) {
 let appSettings = {
     preventSuspend: false,
     autoLaunch: true,
-    notificationType: 'both', // 'system', 'app', 'both'
+    notificationType: 'app', // 'system', 'app', 'both'
     notificationPosition: 'bottom-right',
     minimizeToTray: true,
-    showTimerInTray: false
+    showTimerInTray: false,
+    notificationDuration: 30 // seconds, 0 for never
 };
 
 try {
@@ -54,6 +55,7 @@ function createWindow() {
     win = new BrowserWindow({
         width: 900,
         height: 700,
+        frame: false, // Custom Title Bar
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -226,12 +228,15 @@ ipcMain.handle('show-custom-notification', (event, data) => {
 
     notificationWindow.loadURL(`file://${path.join(__dirname, 'notification.html')}?${params.toString()}`);
 
-    // Fecha automaticamente depois de 30s
-    setTimeout(() => {
-        if (notificationWindow && !notificationWindow.isDestroyed()) {
-            notificationWindow.close();
-        }
-    }, 30000);
+    // Fecha automaticamente baseado na setting
+    const duration = appSettings.notificationDuration || 30;
+    if (duration > 0) {
+        setTimeout(() => {
+            if (notificationWindow && !notificationWindow.isDestroyed()) {
+                notificationWindow.close();
+            }
+        }, duration * 1000);
+    }
 
     notificationWindow.on('closed', () => {
         notificationWindow = null;
@@ -325,6 +330,25 @@ if (!gotTheLock) {
 ipcMain.handle('exit-app', () => {
     isQuitting = true;
     app.quit();
+});
+
+// Window Controls
+ipcMain.on('window-minimize', () => {
+    if (win) win.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+    if (win) {
+        if (win.isMaximized()) {
+            win.unmaximize();
+        } else {
+            win.maximize();
+        }
+    }
+});
+
+ipcMain.on('window-close', () => {
+    if (win) win.close();
 });
 
 // Manipulador de saída
