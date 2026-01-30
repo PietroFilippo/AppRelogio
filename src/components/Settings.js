@@ -44,6 +44,7 @@ export function Settings() {
                             <option value="system" ${settings.notificationType === 'system' ? 'selected' : ''}>System (Windows)</option>
                             <option value="app" ${settings.notificationType === 'app' ? 'selected' : ''}>App Custom</option>
                             <option value="both" ${settings.notificationType === 'both' ? 'selected' : ''}>Both</option>
+                            <option value="none" ${settings.notificationType === 'none' ? 'selected' : ''}>None</option>
                         </select>
                     </div>
                     <div style="font-size: 12px; color: #888; margin-top: 5px;">Choose how you want to be notified.</div>
@@ -57,9 +58,16 @@ export function Settings() {
                             <option value="top-right" ${settings.notificationPosition === 'top-right' ? 'selected' : ''}>Top Right</option>
                             <option value="top-left" ${settings.notificationPosition === 'top-left' ? 'selected' : ''}>Top Left</option>
                             <option value="bottom-left" ${settings.notificationPosition === 'bottom-left' ? 'selected' : ''}>Bottom Left</option>
+                            <option value="custom" ${settings.notificationPosition === 'custom' ? 'selected' : ''}>Custom</option>
                         </select>
                     </div>
                     <div style="font-size: 12px; color: #888; margin-top: 5px;">Where the app notification appears.</div>
+                    
+                    ${settings.notificationPosition === 'custom' ? `
+                        <button id="set-custom-pos" style="margin-top: 10px; width: 100%; background: var(--accent-orange); border: none; padding: 8px; border-radius: 6px; cursor: pointer; color: black; font-weight: bold;">
+                            Set Custom Position
+                        </button>
+                    ` : ''}
                 </div>
 
                 <div class="setting-item" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px;">
@@ -138,6 +146,16 @@ export function Settings() {
                 settings.notificationPosition = value;
                 if (window.electronAPI) {
                     await window.electronAPI.saveSetting('notificationPosition', value);
+                    render(); // Renderiza novamente para mostrar/esconder o botão "Set Custom Position"
+                }
+            };
+        }
+
+        const setCustomPosBtn = container.querySelector('#set-custom-pos');
+        if (setCustomPosBtn) {
+            setCustomPosBtn.onclick = () => {
+                if (window.electronAPI) {
+                    window.electronAPI.pickCustomPosition();
                 }
             };
         }

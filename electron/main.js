@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 
 // Padroniza nome do app para caminho de dados do usuario
 app.setName('Clock App');
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.pietrofilippo.clockapp');
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const userDataPath = app.getPath('userData');
@@ -22,6 +25,8 @@ let appSettings = {
     autoLaunch: true,
     notificationType: 'app', // 'system', 'app', 'both'
     notificationPosition: 'bottom-right',
+    customNotificationX: 0,
+    customNotificationY: 0,
     minimizeToTray: true,
     showTimerInTray: false,
     notificationDuration: 30 // segundos, 0 para nunca
@@ -167,7 +172,12 @@ ipcMain.handle('set-power-blocker', (event, enabled) => {
 
 // IPC: Custom Notification
 ipcMain.handle('show-custom-notification', (event, data) => {
-    // Se app está focado, não mostra notificação customizada
+    // Se o tipo for 'none', não mostra nada (apenas notificação interna do app que já acontece no renderizador)
+    if (appSettings.notificationType === 'none') {
+        return;
+    }
+
+    // Se app está focado, não mostra notificação customizada (a menos que seja explicitado, mas por padrão evitamos poluição)
     if (win && win.isVisible() && win.isFocused()) {
         return;
     }
@@ -200,6 +210,13 @@ ipcMain.handle('show-custom-notification', (event, data) => {
             y = height - notifHeight - padding;
             break;
         case 'bottom-right':
+            x = width - notifWidth - padding;
+            y = height - notifHeight - padding;
+            break;
+        case 'custom':
+            x = appSettings.customNotificationX || (width - notifWidth - padding);
+            y = appSettings.customNotificationY || (height - notifHeight - padding);
+            break;
         default:
             x = width - notifWidth - padding;
             y = height - notifHeight - padding;
@@ -258,6 +275,57 @@ ipcMain.handle('close-custom-notification', () => {
 ipcMain.on('notification-action', (event, data) => {
     if (win && !win.isDestroyed()) {
         win.webContents.send('notification-action', data);
+    }
+});
+
+let positionPickerWindow = null;
+
+ipcMain.handle('pick-custom-notification-position', () => {
+    if (positionPickerWindow) {
+        positionPickerWindow.focus();
+        return;
+    }
+
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    const notifWidth = 350;
+    const notifHeight = 160;
+
+    positionPickerWindow = new BrowserWindow({
+        width: notifWidth,
+        height: notifHeight,
+        x: appSettings.customNotificationX || (width - notifWidth - 20),
+        y: appSettings.customNotificationY || (height - notifHeight - 20),
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+
+    positionPickerWindow.loadURL(`file://${path.join(__dirname, 'positionPicker.html')}`);
+
+    positionPickerWindow.on('closed', () => {
+        positionPickerWindow = null;
+    });
+});
+
+ipcMain.on('save-custom-position', (event) => {
+    if (positionPickerWindow) {
+        const [x, y] = positionPickerWindow.getPosition();
+        appSettings.customNotificationX = x;
+        appSettings.customNotificationY = y;
+
+        fs.writeFileSync(settingsPath, JSON.stringify(appSettings, null, 2));
+
+        positionPickerWindow.close();
+
+        // Opcional: Notifica o front que mudou (embora o Settings.js possa carregar do getSettings)
+        if (win) {
+            win.webContents.send('settings-updated', { key: 'customNotificationPosition', x, y });
+        }
     }
 });
 
