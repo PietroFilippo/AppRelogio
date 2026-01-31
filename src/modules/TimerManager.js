@@ -220,6 +220,10 @@ class TimerManager {
         this.notify('timer-finished');
     }
 
+    repeat() {
+        this.start(this.initialHours, this.initialMinutes, this.initialSeconds, this.label, this.soundId);
+    }
+
     getState() {
         return {
             totalSeconds: this.totalSeconds,

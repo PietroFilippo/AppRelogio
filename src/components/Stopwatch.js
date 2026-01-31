@@ -505,6 +505,55 @@ export function Stopwatch() {
     });
   }
 
+  function downloadResults() {
+    const state = stopwatchManager.getState();
+    if (state.laps.length === 0 && state.elapsed === 0) {
+      showAlert('No data to download.', 'Empty Stopwatch');
+      return;
+    }
+
+    const { fastestIndex, slowestIndex } = getLapStats(state.laps);
+    const now = new Date();
+    const dateStr = now.toLocaleString();
+
+    let content = `STOPWATCH RESULTS\n`;
+    content += `Date: ${dateStr}\n`;
+    content += `Total Time: ${formatTime(state.elapsed)}\n`;
+    content += `-------------------------------------------\n`;
+    content += `LAP      LAP TIME      TOTAL TIME\n`;
+    content += `-------------------------------------------\n`;
+
+    state.laps.reverse().forEach((lap, revIndex) => {
+      const originalIndex = state.laps.length - 1 - revIndex;
+      const lapNum = String(revIndex + 1).padEnd(8);
+      const lapTime = formatTime(lap.lapTime).padEnd(14);
+      const totalTime = formatTime(lap.totalTime);
+
+      let line = `${lapNum}${lapTime}${totalTime}`;
+
+      if (originalIndex === fastestIndex && state.laps.length >= 2) {
+        line += `  [FASTEST]`;
+      } else if (originalIndex === slowestIndex && state.laps.length >= 2) {
+        line += `  [SLOWEST]`;
+      }
+
+      content += line + `\n`;
+    });
+
+    // Reverte de volta para não quebrar o estado interno se laps for por referência
+    state.laps.reverse();
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stopwatch_results_${now.getTime()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   function initColorSelection() {
     const overlay = container.querySelector('#color-selection-overlay');
 
@@ -542,7 +591,10 @@ export function Stopwatch() {
     container.innerHTML = `
             <div class="header">
                 <h1>Stopwatch</h1>
-                <button class="add-btn add-btn-container" id="colors-btn" style="font-size: 14px; width: auto; padding: 0 10px;">Colors</button>
+                <div class="add-btn-container">
+                    <button class="add-btn" id="download-btn" style="font-size: 14px; width: auto; padding: 0 10px; display: ${state.laps.length > 0 || state.elapsed > 0 ? 'inline-block' : 'none'}">Download</button>
+                    <button class="add-btn" id="colors-btn" style="font-size: 14px; width: auto; padding: 0 10px;">Colors</button>
+                </div>
             </div>
             <div class="stopwatch-display">${formatTime(state.elapsed)}</div>
             <div class="controls">
@@ -599,6 +651,11 @@ export function Stopwatch() {
         showColorSelection = true;
         render();
       };
+    }
+
+    const downloadBtn = container.querySelector('#download-btn');
+    if (downloadBtn) {
+      downloadBtn.onclick = downloadResults;
     }
   }
 

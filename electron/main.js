@@ -244,6 +244,7 @@ ipcMain.handle('show-custom-notification', (event, data) => {
         title: data.title,
         message: data.body,
         snooze: data.snoozeEnabled ? 'true' : 'false',
+        repeat: data.repeatEnabled ? 'true' : 'false',
         id: data.id || ''
     });
 

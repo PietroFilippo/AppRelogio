@@ -284,12 +284,15 @@ export function Timer() {
             if (sounds.length === 0) return '<div style="text-align:center; color:#555; padding:10px;">No custom sounds</div>';
             return sounds.map(s => `
                 <div class="custom-sound-item" id="sound-item-${s.id}">
-                    <span class="custom-sound-name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
-                    <div class="sound-actions">
-                        <button class="sound-btn reset-preview" data-id="${s.id}" title="Reset">⏮</button>
-                        <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}" title="Play/Pause">▶</button>
-                        <button class="sound-btn delete" data-id="${s.id}" title="Delete">🗑</button>
+                    <div class="sound-main-info">
+                        <span class="custom-sound-name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
+                        <div class="sound-actions">
+                            <button class="sound-btn reset-preview" data-id="${s.id}" title="Reset">⏮</button>
+                            <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}" title="Play/Pause">▶</button>
+                            <button class="sound-btn delete" data-id="${s.id}" title="Delete">🗑</button>
+                        </div>
                     </div>
+                    <input type="range" class="seek-bar" data-id="${s.id}" value="0" step="0.1">
                 </div>
             `).join('');
         }
@@ -308,12 +311,22 @@ export function Timer() {
 
         function renderAudioState() {
             const list = overlay.querySelector('#custom-sound-list');
-            list.querySelectorAll('.play-preview').forEach(btn => {
-                const id = btn.dataset.id;
-                if (id === playingId && previewAudio && !previewAudio.paused) {
-                    btn.textContent = '⏸';
+            list.querySelectorAll('.custom-sound-item').forEach(item => {
+                const id = item.id.replace('sound-item-', '');
+                const playBtn = item.querySelector('.play-preview');
+                const seekBar = item.querySelector('.seek-bar');
+
+                if (id === playingId && previewAudio) {
+                    playBtn.textContent = previewAudio.paused ? '▶' : '⏸';
+                    seekBar.style.display = 'block';
+                    if (!isNaN(previewAudio.duration)) {
+                        seekBar.max = previewAudio.duration;
+                    }
+                    seekBar.value = previewAudio.currentTime;
                 } else {
-                    btn.textContent = '▶';
+                    playBtn.textContent = '▶';
+                    seekBar.style.display = 'none';
+                    seekBar.value = 0;
                 }
             });
         }
@@ -422,8 +435,23 @@ export function Timer() {
                         previewAudio.onended = () => {
                             renderAudioState();
                         };
+                        previewAudio.ontimeupdate = () => {
+                            renderAudioState();
+                        };
+                        previewAudio.onloadedmetadata = () => {
+                            renderAudioState();
+                        };
                         previewAudio.play().catch(e => console.error(e));
                         renderAudioState();
+                    }
+                };
+            });
+
+            listContainer.querySelectorAll('.seek-bar').forEach(bar => {
+                bar.oninput = (e) => {
+                    const id = bar.dataset.id;
+                    if (playingId === id && previewAudio) {
+                        previewAudio.currentTime = Number(e.target.value);
                     }
                 };
             });
@@ -433,7 +461,10 @@ export function Timer() {
                     const id = btn.dataset.id;
                     if (playingId === id && previewAudio) {
                         previewAudio.currentTime = 0;
-                        if (previewAudio.paused) previewAudio.play();
+                        if (previewAudio.paused) {
+                            previewAudio.play();
+                            renderAudioState();
+                        }
                     }
                 };
             });

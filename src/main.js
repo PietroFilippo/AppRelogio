@@ -63,6 +63,7 @@ function onTimerRing(e) {
               <div style="text-align:center;">
                   <h1 style="font-size:34px; margin:20px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; display:block; padding: 0 10px;">${label}</h1>
                   <p style="color:var(--text-secondary); font-size:24px;">Time is up!</p>
+                  <button class="modal-btn repeat-btn" style="background:var(--accent-orange); color:black; width:100%; margin-top:20px;">Repeat</button>
               </div>
           `,
     onSave: () => {
@@ -72,6 +73,16 @@ function onTimerRing(e) {
   });
 
   currentOverlay = { element: overlay, type: 'timer' };
+
+  const repeatBtn = overlay.querySelector('.repeat-btn');
+  if (repeatBtn) {
+    repeatBtn.onclick = () => {
+      alarmManager.stopAudio();
+      timerManager.repeat();
+      overlay.remove();
+      currentOverlay = null;
+    };
+  }
 
   // Estilo similar ao alarme
   overlay.querySelector('.cancel').style.display = 'none';
@@ -89,6 +100,13 @@ document.addEventListener('timer-ring', onTimerRing);
 
 // Listener pra requisições externas de parada (ex: de Notificação)
 document.addEventListener('timer-stop-requested', () => {
+  if (currentOverlay && currentOverlay.type === 'timer') {
+    currentOverlay.element.remove();
+    currentOverlay = null;
+  }
+});
+
+document.addEventListener('timer-repeat-requested', () => {
   if (currentOverlay && currentOverlay.type === 'timer') {
     currentOverlay.element.remove();
     currentOverlay = null;

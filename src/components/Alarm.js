@@ -32,8 +32,8 @@ export function Alarm() {
       let subTextClass = 'alarm-label';
 
       if (isSnoozing) {
-        labelText = `Snoozing until ${isSnoozing}`;
-        subTextClass = 'alarm-label snoozing'; // Adiciona CSS
+        labelText = `Snoozing until ${isSnoozing} <button class="cancel-snooze-btn" data-id="${alarm.id}" title="Cancel Snooze">✕</button>`;
+        subTextClass = 'alarm-label snoozing';
       } else if (alarm.repeat && alarm.repeat.length > 0) {
         labelText += `, ${formatDays(alarm.repeat)}`;
       }
@@ -116,6 +116,15 @@ export function Alarm() {
         };
       });
     }
+
+    container.querySelectorAll('.cancel-snooze-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const id = Number(e.target.dataset.id);
+        alarmManager.cancelSnooze(id);
+        render();
+      };
+    });
   }
 
   function openAudioSettingsModal() {
@@ -171,12 +180,15 @@ export function Alarm() {
 
       return sounds.map(s => `
             <div class="custom-sound-item" id="sound-item-${s.id}">
-                <span class="custom-sound-name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
-                <div class="sound-actions">
-                    <button class="sound-btn reset-preview" data-id="${s.id}" title="Reset">⏮</button>
-                    <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}" title="Play/Pause">▶</button>
-                    <button class="sound-btn delete" data-id="${s.id}" title="Delete">🗑</button>
+                <div class="sound-main-info">
+                    <span class="custom-sound-name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${s.name}</span>
+                    <div class="sound-actions">
+                        <button class="sound-btn reset-preview" data-id="${s.id}" title="Reset">⏮</button>
+                        <button class="sound-btn play-preview" data-id="${s.id}" data-src="${s.data}" title="Play/Pause">▶</button>
+                        <button class="sound-btn delete" data-id="${s.id}" title="Delete">🗑</button>
+                    </div>
                 </div>
+                <input type="range" class="seek-bar" data-id="${s.id}" value="0" step="0.1">
             </div>
         `).join('');
     }
@@ -196,12 +208,22 @@ export function Alarm() {
     // Helper para atualizar os ícones de play baseados no estado
     function renderAudioState() {
       const list = overlay.querySelector('#custom-sound-list');
-      list.querySelectorAll('.play-preview').forEach(btn => {
-        const id = btn.dataset.id;
-        if (id === playingId && previewAudio && !previewAudio.paused) {
-          btn.textContent = '⏸';
+      list.querySelectorAll('.custom-sound-item').forEach(item => {
+        const id = item.id.replace('sound-item-', '');
+        const playBtn = item.querySelector('.play-preview');
+        const seekBar = item.querySelector('.seek-bar');
+
+        if (id === playingId && previewAudio) {
+          playBtn.textContent = previewAudio.paused ? '▶' : '⏸';
+          seekBar.style.display = 'block';
+          if (!isNaN(previewAudio.duration)) {
+            seekBar.max = previewAudio.duration;
+          }
+          seekBar.value = previewAudio.currentTime;
         } else {
-          btn.textContent = '▶';
+          playBtn.textContent = '▶';
+          seekBar.style.display = 'none';
+          seekBar.value = 0;
         }
       });
     }
@@ -318,8 +340,24 @@ export function Alarm() {
             previewAudio.onended = () => {
               renderAudioState();
             };
+            previewAudio.ontimeupdate = () => {
+              renderAudioState();
+            };
+            previewAudio.onloadedmetadata = () => {
+              renderAudioState();
+            };
             previewAudio.play().catch(e => console.error(e));
             renderAudioState();
+          }
+        };
+      });
+
+      // Seek
+      listContainer.querySelectorAll('.seek-bar').forEach(bar => {
+        bar.oninput = (e) => {
+          const id = bar.dataset.id;
+          if (playingId === id && previewAudio) {
+            previewAudio.currentTime = Number(e.target.value);
           }
         };
       });
@@ -330,7 +368,10 @@ export function Alarm() {
           const id = btn.dataset.id;
           if (playingId === id && previewAudio) {
             previewAudio.currentTime = 0;
-            if (previewAudio.paused) previewAudio.play(); // Auto play no reset
+            if (previewAudio.paused) {
+              previewAudio.play();
+              renderAudioState();
+            }
           }
         };
       });

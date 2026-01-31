@@ -103,6 +103,11 @@
             background-color: #ff9f1c;
             color: #1a1a1a;
         }
+
+        .btn-repeat {
+            background-color: #ff9f1c;
+            color: #1a1a1a;
+        }
     </style>
 </head>
 
@@ -115,6 +120,7 @@
 
     <div class="actions">
         <button id="snooze" class="btn-snooze" style="display: none;">Snooze</button>
+        <button id="repeat" class="btn-repeat" style="display: none;">Repeat</button>
         <button id="stop" class="btn-stop">Stop</button>
     </div>
 
@@ -126,6 +132,7 @@
         const title = params.get('title');
         const message = params.get('message');
         const snoozeEnabled = params.get('snooze') === 'true';
+        const repeatEnabled = params.get('repeat') === 'true';
         const id = params.get('id');
 
         document.getElementById('title').textContent = title || 'Notification';
@@ -136,6 +143,15 @@
             snoozeBtn.style.display = 'block';
             snoozeBtn.onclick = () => {
                 ipcRenderer.send('notification-action', { action: 'snooze', id });
+                window.close();
+            };
+        }
+
+        const repeatBtn = document.getElementById('repeat');
+        if (repeatEnabled) {
+            repeatBtn.style.display = 'block';
+            repeatBtn.onclick = () => {
+                ipcRenderer.send('notification-action', { action: 'repeat', id });
                 window.close();
             };
         }

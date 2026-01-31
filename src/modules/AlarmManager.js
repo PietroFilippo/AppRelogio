@@ -40,6 +40,12 @@ export class AlarmManager {
                         this.stopAlarm(Number(data.id));
                         document.dispatchEvent(new CustomEvent('alarm-stop-requested', { detail: { id: Number(data.id) } }));
                     }
+                } else if (data.action === 'repeat') {
+                    if (data.id === 'timer') {
+                        this.stopAudio();
+                        timerManager.repeat();
+                        document.dispatchEvent(new CustomEvent('timer-repeat-requested'));
+                    }
                 } else if (data.action === 'snooze') {
                     if (data.id !== 'timer') {
                         this.snoozeAlarm(Number(data.id));
@@ -79,15 +85,21 @@ export class AlarmManager {
             }
         });
 
+        let snoozeChanged = false;
         Object.keys(this.snoozedAlarms).forEach(id => {
             if (this.snoozedAlarms[id] === currentTime) {
                 const alarm = this.alarms.find(a => a.id === Number(id));
                 if (alarm) {
                     this.triggerAlarm(alarm, true);
                     delete this.snoozedAlarms[id];
+                    snoozeChanged = true;
                 }
             }
         });
+
+        if (snoozeChanged) {
+            this.saveAlarms();
+        }
     }
 
     getLastUsedSound() {
@@ -104,7 +116,11 @@ export class AlarmManager {
 
         this.ringingAlarms.add(alarm.id);
 
-        await this.handleNotification('Alarm', alarm.label || 'Time is up!', {
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const title = isSnooze ? `Snooze (${timeStr})` : `Alarm (${timeStr})`;
+
+        await this.handleNotification(title, alarm.label || 'Time is up!', {
             snoozeEnabled: alarm.snoozeEnabled,
             id: alarm.id
         });
@@ -135,6 +151,7 @@ export class AlarmManager {
     async triggerTimer(label, soundId) {
         await this.handleNotification('Timer Finished', label || 'Time is up!', {
             snoozeEnabled: false,
+            repeatEnabled: true,
             id: 'timer'
         });
 
@@ -199,6 +216,7 @@ export class AlarmManager {
                     title,
                     body,
                     snoozeEnabled: data.snoozeEnabled,
+                    repeatEnabled: data.repeatEnabled,
                     id: data.id
                 });
             }
@@ -208,6 +226,8 @@ export class AlarmManager {
     stopAlarm(alarmId) {
         if (alarmId) {
             this.ringingAlarms.delete(alarmId);
+            this.clearSnooze(alarmId);
+            this.saveAlarms();
         }
 
         if (this.ringingAlarms.size === 0) {
@@ -230,7 +250,11 @@ export class AlarmManager {
     }
 
     snoozeAlarm(alarmId) {
-        this.stopAlarm(alarmId);
+        this.ringingAlarms.delete(alarmId);
+        if (this.ringingAlarms.size === 0) {
+            this.stopAudio();
+        }
+
         const alarm = this.alarms.find(a => a.id === alarmId);
         if (!alarm) return;
 
@@ -241,7 +265,18 @@ export class AlarmManager {
 
         this.snoozedAlarms[alarmId] = nextTime;
         console.log(`Alarm snoozed for ${duration} min. Next: ${nextTime}`);
-        document.dispatchEvent(new CustomEvent('alarms-updated'));
+        this.saveAlarms();
+    }
+
+    cancelSnooze(alarmId) {
+        this.clearSnooze(alarmId);
+        this.saveAlarms();
+    }
+
+    clearSnooze(alarmId) {
+        if (this.snoozedAlarms[alarmId]) {
+            delete this.snoozedAlarms[alarmId];
+        }
     }
 
     addAlarm(data) {
@@ -270,9 +305,6 @@ export class AlarmManager {
         const alarm = this.alarms.find(a => a.id === id);
         if (alarm) {
             alarm.enabled = !alarm.enabled;
-            if (!alarm.enabled && this.snoozedAlarms[id]) {
-                delete this.snoozedAlarms[id];
-            }
             this.saveAlarms();
         }
     }
